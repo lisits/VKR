@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Арчи - AI помощник для прогнозирования трудозатрат</title>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            font-size: 20px;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            padding: 30px;
+            flex-direction: column;
+        }
+        .character {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .character img {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 10px;
+        }
+        h1 {
+            color: #4a6fa5;
+            font-size: 32px;
+            margin-top: 0;
+        }
+        .example, .upload-section, .manual-section {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .example {
+            background-color: #f0f8ff;
+        }
+        .upload-section {
+            background-color: #e6f7e6;
+        }
+        .manual-section {
+            background-color: #fffbe6;
+        }
+        .example-images {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        .example-images img {
+            width: 48%;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            transition: background-color 0.3s;
+            margin-right: 15px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="file"], input[type="text"], textarea {
+            font-size: 18px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e6f0ff;
+            border-radius: 10px;
+        }
+        .progress-bar-container {
+            margin-top: 15px;
+            background-color: #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 20px;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="character">
+            <img src="{{ url_for('static', filename='images/archi_right.jpg') }}" alt="Арчи - AI помощник">
+            <div style="margin-left: 30px;">
+                <h1>Привет! Это Арчи — AI помощник для прогнозирования трудозатрат</h1>
+                <p>Арчи поможет вам оценить время, необходимое на выполнение задач, и определить, кто будет их делать.</p>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2>Загрузка файла</h2>
+            <p>Загрузите .xlsx или .csv с колонками "Задача" и "Описание".</p>
+            <input type="file" id="fileInput" accept=".xlsx,.csv">
+            <button id="calculateBtn">Рассчитать трудозатраты</button>
+            <button id="downloadBtn" style="display: none;">Скачать результат</button>
+
+            <div class="progress-bar-container" id="progressContainer" style="display:none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="manual-section">
+            <h2>Ручной ввод задачи</h2>
+            <input type="text" id="manualTitle" placeholder="Название задачи">
+            <textarea id="manualDescription" placeholder="Описание задачи"></textarea>
+            <button id="manualCalculateBtn">Рассчитать</button>
+
+            <div class="progress-bar-container" id="manualProgressContainer" style="display:none;">
+                <div class="progress-bar" id="manualProgressBar"></div>
+            </div>
+
+            <div class="result" id="manualResult" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const calculateBtn = document.getElementById('calculateBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const fileInput = document.getElementById('fileInput');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+
+        const manualCalculateBtn = document.getElementById('manualCalculateBtn');
+        const manualTitle = document.getElementById('manualTitle');
+        const manualDescription = document.getElementById('manualDescription');
+        const manualResult = document.getElementById('manualResult');
+        const manualProgressBar = document.getElementById('manualProgressBar');
+        const manualProgressContainer = document.getElementById('manualProgressContainer');
+
+        let resultFilename = null;
+
+        function simulateProgress(bar, container, callback) {
+            container.style.display = 'block';
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 10;
+                bar.style.width = Math.min(progress, 100) + '%';
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    callback();
+                }
+            }, 200);
+        }
+
+        calculateBtn.addEventListener('click', () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Пожалуйста, выберите файл.');
+                return;
+            }
+
+            calculateBtn.disabled = true;
+            simulateProgress(progressBar, progressContainer, () => {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/calculate', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        resultFilename = data.result_file;
+                        downloadBtn.style.display = 'inline-block';
+                        alert('Обработка завершена!');
+                    } else {
+                        alert('Ошибка: ' + data.error);
+                    }
+                })
+                .catch(() => alert('Произошла ошибка.'))
+                .finally(() => {
+                    calculateBtn.disabled = false;
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                });
+            });
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (resultFilename) {
+                window.location.href = `/download/${encodeURIComponent(resultFilename)}`;
+            }
+        });
+
+        manualCalculateBtn.addEventListener('click', () => {
+            const title = manualTitle.value.trim();
+            const description = manualDescription.value.trim();
+
+            if (!title || !description) {
+                alert('Пожалуйста, заполните оба поля.');
+                return;
+            }
+
+            manualCalculateBtn.disabled = true;
+            simulateProgress(manualProgressBar, manualProgressContainer, () => {
+                fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const { role, hours } = data.task;
+                        manualResult.innerHTML = `<p><strong>Роль:</strong> ${role}</p><p><strong>Оценка:</strong> ${hours} ч</p>`;
+                        manualResult.style.display = 'block';
+                    } else {
+                        alert('Ошибка: ' + data.error);
+                    }
+                })
+                .catch(() => alert('Ошибка при отправке задачи.'))
+                .finally(() => {
+                    manualCalculateBtn.disabled = false;
+                    manualProgressContainer.style.display = 'none';
+                    manualProgressBar.style.width = '0%';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
